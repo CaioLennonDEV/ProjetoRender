@@ -56,15 +56,12 @@ export function GanttChart({ items }: GanttChartProps) {
     // Criar hash dos items para detectar mudanças reais
     const currentHash = JSON.stringify(items.map(i => ({ id: i.id, inicio: i.inicio, fim: i.fim })));
     
-    // Se estamos atualizando programaticamente, não reinicializar
+    // Se estamos atualizando programaticamente, não fazer nada
     if (isUpdatingRef.current) {
       console.log('⏸️ Atualização programática detectada, pulando reinicialização do Gantt');
-      // Resetar a flag após um pequeno delay para permitir que o Redux termine de atualizar
-      setTimeout(() => {
-        isUpdatingRef.current = false;
-        itemsHashRef.current = currentHash;
-      }, 100);
-      return;
+      // Atualizar o hash imediatamente para evitar reinicialização
+      itemsHashRef.current = currentHash;
+      return; // IMPORTANTE: retornar aqui evita que o useEffect continue
     }
     
     // Se o hash não mudou, não reinicializar
@@ -73,12 +70,19 @@ export function GanttChart({ items }: GanttChartProps) {
       return;
     }
     
+    // Só reinicializar se realmente houver mudança significativa
     itemsHashRef.current = currentHash;
   }, [items]);
 
   useEffect(() => {
     if (!ganttContainer.current || items.length === 0) {
       setIsInitialized(false);
+      return;
+    }
+    
+    // Se estamos atualizando programaticamente, não reinicializar o Gantt
+    if (isUpdatingRef.current) {
+      console.log('⏸️ Atualização em andamento, pulando inicialização do Gantt');
       return;
     }
 
@@ -399,8 +403,20 @@ export function GanttChart({ items }: GanttChartProps) {
               try {
                 console.log('💾 Chamando dispatch...');
                 
-                // Marcar que estamos fazendo uma atualização programática
+                // IMPORTANTE: Marcar a flag ANTES de chamar o dispatch
+                // Isso garante que o useEffect não reinicialize o Gantt quando os items mudarem
                 isUpdatingRef.current = true;
+                
+                // Atualizar o hash ANTECIPADAMENTE com os novos valores esperados
+                // Isso evita que o useEffect detecte uma mudança
+                const updatedItems = itemsRef.current.map(item => 
+                  item.id === itemId 
+                    ? { ...item, inicio, fim, mes: novoMes }
+                    : item
+                );
+                const newHash = JSON.stringify(updatedItems.map(i => ({ id: i.id, inicio: i.inicio, fim: i.fim })));
+                itemsHashRef.current = newHash;
+                console.log('✅ Hash atualizado ANTECIPADAMENTE para evitar reinicialização');
                 
                 const result = await dispatch(editCronogramaItem({
                   id: itemId,
@@ -415,8 +431,12 @@ export function GanttChart({ items }: GanttChartProps) {
                 console.log('✅ Resultado:', result);
                 console.log('✅ Dados salvos:', { id: itemId, inicio, fim, mes: novoMes });
                 
-                // A flag isUpdatingRef.current já está true, então o useEffect não reinicializará
-                // O Gantt será atualizado quando o Redux atualizar os items, mas sem reinicialização completa
+                // Manter a flag ativa por mais tempo para garantir que o Redux terminou de atualizar
+                // e evitar qualquer reinicialização do Gantt (evita o "refresh" visual)
+                setTimeout(() => {
+                  isUpdatingRef.current = false;
+                  console.log('✅ Flag de atualização resetada após salvamento');
+                }, 2000); // 2 segundos para garantir que tudo terminou
               } catch (dispatchError) {
                 console.error('❌ Erro no dispatch:', dispatchError);
                 console.error('❌ Stack trace:', (dispatchError as Error).stack);
@@ -694,7 +714,7 @@ export function GanttChart({ items }: GanttChartProps) {
       ganttInstance.current = null;
       setIsInitialized(false);
     };
-  }, [items, dispatch]);
+  }, [items]); // Remover dispatch das dependências para evitar re-execuções
 
   if (items.length === 0) {
     return (
