@@ -104,11 +104,6 @@ export function GanttChart({ items }: GanttChartProps) {
         console.log('Inicializando Gantt com', tasks.length, 'tarefas');
         console.log('Tasks:', tasks);
         
-        // Encontrar a data mínima e máxima para ajustar a visualização
-        const dates = tasks.map(t => [new Date(t.start), new Date(t.end)]).flat();
-        const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
-        const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
-        
         ganttInstance.current = new Gantt(ganttContainer.current, tasks, {
           view_mode: 'Month',
           header_height: 60,
