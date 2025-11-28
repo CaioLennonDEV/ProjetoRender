@@ -1,7 +1,65 @@
 import initSqlJs, { Database } from 'sql.js';
 import { CronogramaItem } from './types';
 
+const STORAGE_KEY = 'cronograma_db';
 let db: Database | null = null;
+
+// Função para salvar o banco SQLite no localStorage
+function saveDatabase(): void {
+  if (!db) {
+    console.warn('Tentativa de salvar banco, mas db não está inicializado');
+    return;
+  }
+  
+  try {
+    // Exportar o banco SQLite completo (formato binário)
+    const data = db.export();
+    const buffer = Array.from(data);
+    
+    // Salvar no localStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(buffer));
+    
+    // Verificar quantos registros temos no banco
+    const countResult = db.exec('SELECT COUNT(*) as count FROM cronograma');
+    const count = countResult.length > 0 && countResult[0].values.length > 0 
+      ? countResult[0].values[0][0] as number 
+      : 0;
+    
+    console.log(`✅ Banco SQLite salvo com sucesso! Total de registros: ${count}`);
+  } catch (error) {
+    console.error('❌ Erro ao salvar banco SQLite:', error);
+  }
+}
+
+// Função para carregar o banco SQLite do localStorage
+function loadDatabaseFromStorage(SQL: any): Database | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const buffer = JSON.parse(stored);
+      const uint8Array = new Uint8Array(buffer);
+      const loadedDb = new SQL.Database(uint8Array);
+      
+      // Verificar quantos registros temos no banco carregado
+      try {
+        const countResult = loadedDb.exec('SELECT COUNT(*) as count FROM cronograma');
+        const count = countResult.length > 0 && countResult[0].values.length > 0 
+          ? countResult[0].values[0][0] as number 
+          : 0;
+        console.log(`📂 Banco SQLite carregado do localStorage! Total de registros: ${count}`);
+      } catch (e) {
+        console.warn('Banco carregado mas sem schema válido');
+      }
+      
+      return loadedDb;
+    } else {
+      console.log('📝 Nenhum banco SQLite encontrado no localStorage, criando novo...');
+    }
+  } catch (error) {
+    console.error('❌ Erro ao carregar banco SQLite do storage:', error);
+  }
+  return null;
+}
 
 export async function initDatabase(): Promise<Database> {
   if (db) {
@@ -12,9 +70,43 @@ export async function initDatabase(): Promise<Database> {
     locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
   });
 
-  db = new SQL.Database();
+  // Tentar carregar do localStorage primeiro
+  const loadedDb = loadDatabaseFromStorage(SQL);
+  
+  if (loadedDb) {
+    db = loadedDb;
+    // Verificar se o schema existe e está correto
+    try {
+      db.exec('SELECT COUNT(*) FROM cronograma');
+      // Schema existe, garantir que está atualizado e retornar
+      // Executar CREATE TABLE IF NOT EXISTS para garantir que o schema está correto
+      const schema = `
+        CREATE TABLE IF NOT EXISTS cronograma (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          mes TEXT NOT NULL,
+          atividade TEXT NOT NULL,
+          categoria TEXT,
+          inicio DATE,
+          fim DATE
+        );
+      `;
+      db.run(schema);
+      return db;
+    } catch (error) {
+      // Schema não existe ou está corrompido, criar novo banco
+      console.warn('Banco carregado do storage está corrompido ou sem schema, criando novo:', error);
+      try {
+        db.close();
+      } catch (e) {
+        // Ignorar erro ao fechar
+      }
+      db = new SQL.Database();
+    }
+  } else {
+    db = new SQL.Database();
+  }
 
-  // Executar schema SQL
+  // Executar schema SQL (sempre executar para garantir que existe)
   const schema = `
     CREATE TABLE IF NOT EXISTS cronograma (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,6 +151,7 @@ export async function initDatabase(): Promise<Database> {
       ('Dezembro', 'Anúncio da Inovação', 'Evento', '2025-12-01', '2025-12-31');
     `;
     db.run(insertData);
+    saveDatabase(); // Salvar após inserir dados iniciais
   }
 
   return db;
@@ -101,7 +194,13 @@ export async function insertCronogramaItem(
   );
   stmt.run([mes, atividade, categoria, inicio, fim]);
   stmt.free();
-  return database.exec('SELECT last_insert_rowid()')[0].values[0][0] as number;
+  const id = database.exec('SELECT last_insert_rowid()')[0].values[0][0] as number;
+  
+  // Salvar o banco SQLite completo após inserir
+  saveDatabase();
+  
+  console.log(`➕ Item inserido no SQLite com ID: ${id}`);
+  return id;
 }
 
 export async function updateCronogramaItem(
@@ -118,6 +217,11 @@ export async function updateCronogramaItem(
   );
   stmt.run([mes, atividade, categoria, inicio, fim, id]);
   stmt.free();
+  
+  // Salvar o banco SQLite completo após atualizar
+  saveDatabase();
+  
+  console.log(`✏️ Item atualizado no SQLite com ID: ${id}`);
 }
 
 export async function deleteCronogramaItem(id: number): Promise<void> {
@@ -125,5 +229,10 @@ export async function deleteCronogramaItem(id: number): Promise<void> {
   const stmt = database.prepare('DELETE FROM cronograma WHERE id = ?');
   stmt.run([id]);
   stmt.free();
+  
+  // Salvar o banco SQLite completo após deletar
+  saveDatabase();
+  
+  console.log(`🗑️ Item deletado do SQLite com ID: ${id}`);
 }
 
