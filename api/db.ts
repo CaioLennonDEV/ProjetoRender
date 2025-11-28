@@ -1,12 +1,22 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Carregar .env apenas em desenvolvimento (local)
+// No Render, as variáveis de ambiente são configuradas no painel
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
 
 const { Pool } = pg;
 
 // Suportar tanto connection string quanto variáveis individuais
 let poolConfig: pg.PoolConfig;
+
+// Log das variáveis disponíveis (sem mostrar valores sensíveis)
+console.log('🔍 Verificando variáveis de ambiente...');
+console.log('   DATABASE_URL:', process.env.DATABASE_URL ? '✅ Configurado' : '❌ Não configurado');
+console.log('   DB_HOST:', process.env.DB_HOST ? '✅ Configurado' : '❌ Não configurado');
+console.log('   NODE_ENV:', process.env.NODE_ENV || 'development');
 
 if (process.env.DATABASE_URL) {
   // Usar connection string se disponível
@@ -31,7 +41,23 @@ if (process.env.DATABASE_URL) {
   };
   console.log('🔧 Usando variáveis individuais de conexão');
 } else {
-  throw new Error('❌ Nenhuma configuração de banco de dados encontrada. Configure DATABASE_URL ou variáveis DB_*');
+  const errorMsg = `
+❌ Nenhuma configuração de banco de dados encontrada!
+
+Para configurar no Render:
+1. Acesse o painel do seu serviço no Render
+2. Vá em "Environment" (Variáveis de Ambiente)
+3. Adicione a variável DATABASE_URL com o valor:
+   postgresql://testeinova_user:5FdC9e4aEYutv82bKyuWcT4alEnWWxv1@dpg-d4krmb3e5dus73fe18ag-a.oregon-postgres.render.com:5432/testeinova
+
+Ou configure as variáveis individuais:
+- DB_HOST=dpg-d4krmb3e5dus73fe18ag-a.oregon-postgres.render.com
+- DB_PORT=5432
+- DB_NAME=testeinova
+- DB_USER=testeinova_user
+- DB_PASSWORD=5FdC9e4aEYutv82bKyuWcT4alEnWWxv1
+  `.trim();
+  throw new Error(errorMsg);
 }
 
 const pool = new Pool(poolConfig);
