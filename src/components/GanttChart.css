@@ -40,6 +40,16 @@
   font-size: 13px;
   font-weight: 600;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+  /* Limitar largura do texto e truncar */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Para SVG, usar textLength para limitar */
+.gantt-container .bar-label text {
+  text-anchor: start;
+  dominant-baseline: middle;
 }
 
 /* Cores personalizadas para as barras do Gantt */

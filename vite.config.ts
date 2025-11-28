@@ -16,7 +16,7 @@ function suppressWarnings(): Plugin {
       
       console.warn = (...args: any[]) => {
         const message = String(args[0] || '')
-        // Suprimir avisos sobre módulos Node.js sendo externalizados (esperado para sql.js)
+        // Suprimir avisos sobre módulos Node.js sendo externalizados
         if (
           message.includes('has been externalized for browser compatibility') ||
           message.includes('Module "fs"') ||
@@ -92,10 +92,6 @@ export default defineConfig({
         api: 'modern-compiler', // Usar API moderna do Sass
       },
     },
-  },
-  // Configurar otimizações para sql.js
-  optimizeDeps: {
-    exclude: ['sql.js'], // Não otimizar sql.js (usa WASM)
   },
 })
 
